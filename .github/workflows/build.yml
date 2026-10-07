@@ -24,62 +24,56 @@ jobs:
     - name: 修复代码问题
       run: |
         SCREEN_DIR=app/src/main/java/com/gunmu/town/screen
+        DATA_DIR=app/src/main/java/com/gunmu/town/data
         UI_FILE=app/src/main/java/com/gunmu/town/util/UI.java
 
-        echo "===== 1. 重命名 java 文件（首字母大写）====="
-        find app/src/main/java -iname "*.java" -type f | while read f; do
+        echo "===== 1. 强制改名 Simplescreen.java ====="
+        find app/src/main/java -type f -iname "simplescreen.java" | while read f; do
           dir=$(dirname "$f")
-          base=$(basename "$f")
-          first=$(echo "$base" | cut -c1)
-          rest=$(echo "$base" | cut -c2-)
-          upper=$(echo "$first" | tr '[:lower:]' '[:upper:]')
-          newname="${upper}${rest}"
-          if [ "$base" != "$newname" ]; then
-            mv "$f" "$dir/$newname"
-            echo "  重命名: $base -> $newname"
+          target="$dir/SimpleScreen.java"
+          if [ "$f" != "$target" ]; then
+            mv "$f" "$target"
+            echo "  已改名: $f"
+            echo "       ->  $target"
           fi
         done
 
         echo ""
-        echo "===== 2. RaidScreen.java 补全 import ====="
-        RAID_FILE=$(find "$SCREEN_DIR" -iname "raidscreen.java" | head -1)
-        if [ -n "$RAID_FILE" ]; then
-          # 检查是否有 import android.widget.LinearLayout
-          if ! grep -q "import android.widget.LinearLayout;" "$RAID_FILE"; then
-            sed -i '0,/^import android.widget.FrameLayout;/s//import android.widget.FrameLayout;\nimport android.widget.LinearLayout;/' "$RAID_FILE"
-            echo "  已插入 LinearLayout import"
-          fi
-          # 检查 android.graphics.RectF
-          if ! grep -q "import android.graphics.RectF;" "$RAID_FILE"; then
-            sed -i '0,/^import android.graphics.Paint;/s//import android.graphics.Paint;\nimport android.graphics.RectF;/' "$RAID_FILE"
-            echo "  已插入 RectF import"
-          fi
-          # 检查 android.view.Gravity
-          if ! grep -q "import android.view.Gravity;" "$RAID_FILE"; then
-            sed -i '0,/^import android.view.MotionEvent;/s//import android.view.Gravity;\nimport android.view.MotionEvent;/' "$RAID_FILE"
-            echo "  已插入 Gravity import"
-          fi
-          echo "  ---- RaidScreen 的 import 部分 ----"
-          grep "^import" "$RAID_FILE" | head -30
+        echo "===== 2. 打印 Save.java 240-260 行（含行号）====="
+        SAVE_FILE="$DATA_DIR/Save.java"
+        if [ -f "$SAVE_FILE" ]; then
+          awk 'NR>=240 && NR<=260 { printf "%4d: %s\n", NR, $0 }' "$SAVE_FILE"
+        else
+          echo "  Save.java 不存在"
         fi
 
         echo ""
-        echo "===== 3. UI.java 补 GameState import ====="
+        echo "===== 3. RaidScreen 补 import ====="
+        RAID_FILE=$(find "$SCREEN_DIR" -iname "raidscreen.java" | head -1)
+        if [ -n "$RAID_FILE" ]; then
+          if ! grep -q "import android.widget.LinearLayout;" "$RAID_FILE"; then
+            sed -i '0,/^import android.widget.FrameLayout;/s//import android.widget.FrameLayout;\nimport android.widget.LinearLayout;/' "$RAID_FILE"
+          fi
+          if ! grep -q "import android.graphics.RectF;" "$RAID_FILE"; then
+            sed -i '0,/^import android.graphics.Paint;/s//import android.graphics.Paint;\nimport android.graphics.RectF;/' "$RAID_FILE"
+          fi
+          if ! grep -q "import android.view.Gravity;" "$RAID_FILE"; then
+            sed -i '0,/^import android.view.MotionEvent;/s//import android.view.Gravity;\nimport android.view.MotionEvent;/' "$RAID_FILE"
+          fi
+          sed -i 's|GameData\.Enemy target = null;|Enemy target = null;|g' "$RAID_FILE"
+        fi
+
+        echo ""
+        echo "===== 4. UI.java 补 GameState import ====="
         if ! grep -q "import com.gunmu.town.data.GameState" "$UI_FILE"; then
           sed -i 's|^import com.gunmu.town.MainActivity;|import com.gunmu.town.MainActivity;\nimport com.gunmu.town.data.GameState;|' "$UI_FILE"
         fi
 
         echo ""
-        echo "===== 4. SimpleScreen 去掉 final ====="
+        echo "===== 5. SimpleScreen 去掉 final ====="
         SIMPLE_FILE=$(find "$SCREEN_DIR" -iname "simplescreen.java" | head -1)
         if [ -n "$SIMPLE_FILE" ]; then
           sed -i 's|private final GameState s;|private GameState s;|' "$SIMPLE_FILE"
-        fi
-
-        echo ""
-        echo "===== 5. RaidScreen 类型修正 ====="
-        if [ -n "$RAID_FILE" ]; then
-          sed -i 's|GameData\.Enemy target = null;|Enemy target = null;|g' "$RAID_FILE"
         fi
 
         echo ""
