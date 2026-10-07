@@ -39,7 +39,6 @@ jobs:
         if [ -n "$RAID_FILE" ]; then
           sed -i 's|GameData\.Enemy target = null;|Enemy target = null;|g' "$RAID_FILE"
         fi
-
         echo "修复完成"
 
     - uses: actions/setup-java@v4
@@ -67,56 +66,28 @@ jobs:
         $SDKMANAGER "platform-tools" "platforms;android-34" "build-tools;34.0.0" > /dev/null 2>&1 || true
 
     - name: 构建 APK
-      id: build
       run: |
         set +e
-        gradle assembleDebug --no-daemon --console=plain 2>&1 | tee gradle.log
+        gradle assembleDebug --no-daemon --console=plain > gradle.log 2>&1
         STATUS=$?
-        echo "gradle 退出码: $STATUS"
-        echo "build_status=$STATUS" >> $GITHUB_OUTPUT
 
+        # 只把纯 error 行提取出来，压缩显示
         echo ""
-        echo "============ gradle 日志最后 30 行 ============"
-        tail -30 gradle.log
-
+        echo "############################################"
+        echo "# 编译错误清单（共 $(grep -c 'error:' gradle.log) 条）"
+        echo "############################################"
+        grep "error:" gradle.log | sed 's|/home/runner/work/gunmu-town1/gunmu-town1/||' | sort -u
+        echo "############################################"
         echo ""
-        echo "============ BUILD 关键字统计 ============"
-        grep -c "BUILD SUCCESSFUL" gradle.log && echo "找到 SUCCESSFUL" || echo "没找到 SUCCESSFUL"
-        grep -c "BUILD FAILED" gradle.log && echo "找到 FAILED" || echo "没找到 FAILED"
-        grep -c "error:" gradle.log && echo "有编译错误" || echo "没有编译错误"
-
+        echo "构建状态：$STATUS（0=成功）"
         exit $STATUS
-
-    - name: 深度查找 APK
-      if: always()
-      run: |
-        echo "============ 全仓库找 apk ============"
-        find . -name "*.apk" -type f 2>/dev/null | head -20 || echo "0 个 apk"
-
-        echo ""
-        echo "============ app/build 完整目录树 ============"
-        find app/build -type d 2>/dev/null | head -40 || echo "app/build 不存在"
-
-        echo ""
-        echo "============ app/build 所有文件 ============"
-        find app/build -type f 2>/dev/null | head -40 || echo "app/build 无文件"
-
-        echo ""
-        echo "============ app/build/outputs 详细 ============"
-        ls -laR app/build/outputs/ 2>/dev/null || echo "app/build/outputs 不存在"
-
-        echo ""
-        echo "============ 检查 gradle 是否生成了 apk 任务 ============"
-        grep -i "packageDebug\|assembleDebug\|Package.*Debug" gradle.log | head -20 || echo "gradle.log 无打包任务记录"
 
     - name: 上传 APK
       uses: actions/upload-artifact@v4
-      if: always()
+      if: success()
       with:
         name: gunmu-town-apk
         path: |
           app/build/outputs/apk/debug/app-debug.apk
-          app/build/outputs/apk/**/*.apk
-          app/build/**/*.apk
           **/*.apk
         if-no-files-found: warn
