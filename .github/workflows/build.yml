@@ -26,25 +26,27 @@ jobs:
         SCREEN_DIR=app/src/main/java/com/gunmu/town/screen
         DATA_DIR=app/src/main/java/com/gunmu/town/data
         UI_FILE=app/src/main/java/com/gunmu/town/util/UI.java
+        SAVE_FILE="$DATA_DIR/Save.java"
 
-        echo "===== 1. 强制改名 Simplescreen.java ====="
+        echo "===== 1. 强制改名 SimpleScreen ====="
         find app/src/main/java -type f -iname "simplescreen.java" | while read f; do
           dir=$(dirname "$f")
           target="$dir/SimpleScreen.java"
           if [ "$f" != "$target" ]; then
             mv "$f" "$target"
-            echo "  已改名: $f"
-            echo "       ->  $target"
+            echo "  改名: $f -> $target"
           fi
         done
 
         echo ""
-        echo "===== 2. 打印 Save.java 240-260 行（含行号）====="
-        SAVE_FILE="$DATA_DIR/Save.java"
+        echo "===== 2. Save.java 补全 import ====="
         if [ -f "$SAVE_FILE" ]; then
-          awk 'NR>=240 && NR<=260 { printf "%4d: %s\n", NR, $0 }' "$SAVE_FILE"
-        else
-          echo "  Save.java 不存在"
+          if ! grep -q "import java.util.HashMap;" "$SAVE_FILE"; then
+            sed -i '0,/^import org.json.JSONObject;/s//import java.util.HashMap;\nimport java.util.Map;\nimport org.json.JSONObject;/' "$SAVE_FILE"
+            echo "  已插入 HashMap/Map import"
+          fi
+          echo "  ---- Save.java 的 import 部分 ----"
+          grep "^import" "$SAVE_FILE"
         fi
 
         echo ""
@@ -75,10 +77,6 @@ jobs:
         if [ -n "$SIMPLE_FILE" ]; then
           sed -i 's|private final GameState s;|private GameState s;|' "$SIMPLE_FILE"
         fi
-
-        echo ""
-        echo "===== 修复后的所有 java 文件 ====="
-        find app/src/main/java -name "*.java" -type f | sort
 
     - uses: actions/setup-java@v4
       with:
