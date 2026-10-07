@@ -21,25 +21,47 @@ jobs:
         fi
         rm -rf _extract
 
-    - name: 自动修复代码 bug
+    - name: 修复代码问题
       run: |
+        echo "===== 1. 重命名 java 文件（首字母大写）====="
+        find app/src/main/java -iname "*.java" -type f | while read f; do
+          dir=$(dirname "$f")
+          base=$(basename "$f")
+          first=$(echo "$base" | cut -c1)
+          rest=$(echo "$base" | cut -c2-)
+          upper=$(echo "$first" | tr '[:lower:]' '[:upper:]')
+          newname="${upper}${rest}"
+          if [ "$base" != "$newname" ]; then
+            mv "$f" "$dir/$newname"
+            echo "  重命名: $base -> $newname"
+          fi
+        done
+
+        echo ""
+        echo "===== 2. 修复后的 java 文件列表 ====="
+        find app/src/main/java -name "*.java" -type f | sort
+
+        echo ""
+        echo "===== 3. 修复 UI.java import ====="
         SCREEN_DIR=app/src/main/java/com/gunmu/town/screen
         UI_FILE=app/src/main/java/com/gunmu/town/util/UI.java
-
         if ! grep -q "import com.gunmu.town.data.GameState" "$UI_FILE"; then
           sed -i 's|^import com.gunmu.town.MainActivity;|import com.gunmu.town.MainActivity;\nimport com.gunmu.town.data.GameState;|' "$UI_FILE"
         fi
 
+        echo ""
+        echo "===== 4. 修复 SimpleScreen 去掉 final ====="
         SIMPLE_FILE=$(find "$SCREEN_DIR" -iname "simplescreen.java" | head -1)
         if [ -n "$SIMPLE_FILE" ]; then
           sed -i 's|private final GameState s;|private GameState s;|' "$SIMPLE_FILE"
         fi
 
+        echo ""
+        echo "===== 5. 修复 RaidScreen 类型 ====="
         RAID_FILE=$(find "$SCREEN_DIR" -iname "raidscreen.java" | head -1)
         if [ -n "$RAID_FILE" ]; then
           sed -i 's|GameData\.Enemy target = null;|Enemy target = null;|g' "$RAID_FILE"
         fi
-        echo "修复完成"
 
     - uses: actions/setup-java@v4
       with:
@@ -71,12 +93,11 @@ jobs:
         gradle assembleDebug --no-daemon --console=plain > gradle.log 2>&1
         STATUS=$?
 
-        # 只把纯 error 行提取出来，压缩显示
         echo ""
         echo "############################################"
         echo "# 编译错误清单（共 $(grep -c 'error:' gradle.log) 条）"
         echo "############################################"
-        grep "error:" gradle.log | sed 's|/home/runner/work/gunmu-town1/gunmu-town1/||' | sort -u
+        grep "error:" gradle.log | sed 's|/home/runner/work/gunmu-town1/gunmu-town1/||' | head -60
         echo "############################################"
         echo ""
         echo "构建状态：$STATUS（0=成功）"
