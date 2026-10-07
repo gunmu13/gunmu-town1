@@ -22,20 +22,8 @@ jobs:
         rm -rf _extract
         echo "=== 根目录文件 ==="
         ls -la
-
-    - name: 环境诊断
-      run: |
-        echo "=== settings.gradle ==="
-        cat settings.gradle 2>/dev/null || echo "无 settings.gradle"
-        echo ""
-        echo "=== 根 build.gradle ==="
-        cat build.gradle 2>/dev/null || echo "无根 build.gradle"
-        echo ""
-        echo "=== app/build.gradle ==="
-        cat app/build.gradle 2>/dev/null || echo "无 app/build.gradle"
-        echo ""
-        echo "=== app/src/main/AndroidManifest.xml ==="
-        cat app/src/main/AndroidManifest.xml 2>/dev/null || echo "无 AndroidManifest.xml"
+        echo "=== java 源文件清单 ==="
+        find app/src/main/java -name "*.java" 2>/dev/null
 
     - uses: actions/setup-java@v4
       with:
@@ -60,22 +48,28 @@ jobs:
         SDKMANAGER=/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
         yes | $SDKMANAGER --licenses > /dev/null 2>&1 || true
         $SDKMANAGER "platform-tools" "platforms;android-34" "build-tools;34.0.0" > /dev/null 2>&1 || true
-        echo "SDK 包安装完成"
 
     - name: 构建 APK
-      run: gradle assembleDebug --no-daemon --stacktrace
+      run: |
+        set +e
+        gradle assembleDebug --no-daemon 2>&1 | tee gradle.log
+        STATUS=$?
+        echo ""
+        echo "================ 错误摘要 ================"
+        grep -A 30 "What went wrong" gradle.log || echo "（没有 What went wrong）"
+        echo ""
+        echo "================ 编译错误 ================"
+        grep -B 2 -A 3 "error:" gradle.log || echo "（没有 error:）"
+        echo ""
+        echo "================ 失败任务 ================"
+        grep "FAILED" gradle.log || echo "（没有 FAILED）"
+        echo "=========================================="
+        exit $STATUS
 
     - name: 查找 APK 文件
       if: always()
       run: |
-        echo "=== 搜索所有 .apk 文件 ==="
-        find . -name "*.apk" -type f 2>/dev/null
-        echo ""
-        echo "=== app/build 目录结构 ==="
-        ls -la app/build/ 2>/dev/null || echo "app/build 不存在"
-        echo ""
-        echo "=== app/build/outputs 目录 ==="
-        ls -laR app/build/outputs/ 2>/dev/null || echo "app/build/outputs 不存在"
+        find . -name "*.apk" -type f 2>/dev/null || echo "没找到 APK"
 
     - name: 上传 APK
       uses: actions/upload-artifact@v4
