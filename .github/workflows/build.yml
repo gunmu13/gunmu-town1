@@ -20,46 +20,27 @@ jobs:
           cp -r _extract/. .
         fi
         rm -rf _extract
-        echo "=== 实际 java 文件列表 ==="
-        find app/src/main/java -name "*.java" -type f
 
     - name: 自动修复代码 bug
       run: |
         SCREEN_DIR=app/src/main/java/com/gunmu/town/screen
         UI_FILE=app/src/main/java/com/gunmu/town/util/UI.java
 
-        echo "===== 修复 1: UI.java 加 GameState import ====="
-        if grep -q "import com.gunmu.town.data.GameState" "$UI_FILE"; then
-          echo "GameState import 已存在，跳过"
-        else
+        if ! grep -q "import com.gunmu.town.data.GameState" "$UI_FILE"; then
           sed -i 's|^import com.gunmu.town.MainActivity;|import com.gunmu.town.MainActivity;\nimport com.gunmu.town.data.GameState;|' "$UI_FILE"
-          echo "已插入 GameState import"
         fi
-        grep -n "import com.gunmu.town.data.GameState" "$UI_FILE" && echo "✓ UI.java OK"
 
-        echo "===== 修复 2: SimpleScreen（自动找大小写）====="
         SIMPLE_FILE=$(find "$SCREEN_DIR" -iname "simplescreen.java" | head -1)
-        echo "找到文件: $SIMPLE_FILE"
         if [ -n "$SIMPLE_FILE" ]; then
           sed -i 's|private final GameState s;|private GameState s;|' "$SIMPLE_FILE"
-          grep -n "private GameState s;" "$SIMPLE_FILE" && echo "✓ SimpleScreen OK"
-        else
-          echo "✗ 没找到 SimpleScreen 文件"
         fi
 
-        echo "===== 修复 3: RaidScreen 类型修正 ====="
         RAID_FILE=$(find "$SCREEN_DIR" -iname "raidscreen.java" | head -1)
-        echo "找到文件: $RAID_FILE"
         if [ -n "$RAID_FILE" ]; then
           sed -i 's|GameData\.Enemy target = null;|Enemy target = null;|g' "$RAID_FILE"
-          grep -n "Enemy target = null;" "$RAID_FILE" && echo "✓ RaidScreen OK"
-        else
-          echo "✗ 没找到 RaidScreen 文件"
         fi
 
-        echo ""
-        echo "===== 检查所有 screen 里的 final GameState ====="
-        grep -rn "final GameState" "$SCREEN_DIR" || echo "已无 final GameState"
+        echo "修复完成"
 
     - uses: actions/setup-java@v4
       with:
@@ -86,21 +67,47 @@ jobs:
         $SDKMANAGER "platform-tools" "platforms;android-34" "build-tools;34.0.0" > /dev/null 2>&1 || true
 
     - name: 构建 APK
+      id: build
       run: |
         set +e
-        gradle assembleDebug --no-daemon 2>&1 | tee gradle.log
+        gradle assembleDebug --no-daemon --console=plain 2>&1 | tee gradle.log
         STATUS=$?
+        echo "gradle 退出码: $STATUS"
+        echo "build_status=$STATUS" >> $GITHUB_OUTPUT
+
         echo ""
-        echo "================ 编译错误 ================"
-        grep -B 1 -A 4 "error:" gradle.log | head -100 || echo "（无编译错误）"
-        echo "=========================================="
+        echo "============ gradle 日志最后 30 行 ============"
+        tail -30 gradle.log
+
+        echo ""
+        echo "============ BUILD 关键字统计 ============"
+        grep -c "BUILD SUCCESSFUL" gradle.log && echo "找到 SUCCESSFUL" || echo "没找到 SUCCESSFUL"
+        grep -c "BUILD FAILED" gradle.log && echo "找到 FAILED" || echo "没找到 FAILED"
+        grep -c "error:" gradle.log && echo "有编译错误" || echo "没有编译错误"
+
         exit $STATUS
 
-    - name: 查找 APK
+    - name: 深度查找 APK
       if: always()
       run: |
-        find . -name "*.apk" -type f 2>/dev/null || echo "没找到 APK"
-        ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "apk 目录不存在"
+        echo "============ 全仓库找 apk ============"
+        find . -name "*.apk" -type f 2>/dev/null | head -20 || echo "0 个 apk"
+
+        echo ""
+        echo "============ app/build 完整目录树 ============"
+        find app/build -type d 2>/dev/null | head -40 || echo "app/build 不存在"
+
+        echo ""
+        echo "============ app/build 所有文件 ============"
+        find app/build -type f 2>/dev/null | head -40 || echo "app/build 无文件"
+
+        echo ""
+        echo "============ app/build/outputs 详细 ============"
+        ls -laR app/build/outputs/ 2>/dev/null || echo "app/build/outputs 不存在"
+
+        echo ""
+        echo "============ 检查 gradle 是否生成了 apk 任务 ============"
+        grep -i "packageDebug\|assembleDebug\|Package.*Debug" gradle.log | head -20 || echo "gradle.log 无打包任务记录"
 
     - name: 上传 APK
       uses: actions/upload-artifact@v4
@@ -109,5 +116,7 @@ jobs:
         name: gunmu-town-apk
         path: |
           app/build/outputs/apk/debug/app-debug.apk
+          app/build/outputs/apk/**/*.apk
+          app/build/**/*.apk
           **/*.apk
         if-no-files-found: warn
