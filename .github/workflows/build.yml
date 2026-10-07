@@ -23,6 +23,9 @@ jobs:
 
     - name: 修复代码问题
       run: |
+        SCREEN_DIR=app/src/main/java/com/gunmu/town/screen
+        UI_FILE=app/src/main/java/com/gunmu/town/util/UI.java
+
         echo "===== 1. 重命名 java 文件（首字母大写）====="
         find app/src/main/java -iname "*.java" -type f | while read f; do
           dir=$(dirname "$f")
@@ -38,30 +41,50 @@ jobs:
         done
 
         echo ""
-        echo "===== 2. 修复后的 java 文件列表 ====="
-        find app/src/main/java -name "*.java" -type f | sort
+        echo "===== 2. RaidScreen.java 补全 import ====="
+        RAID_FILE=$(find "$SCREEN_DIR" -iname "raidscreen.java" | head -1)
+        if [ -n "$RAID_FILE" ]; then
+          # 检查是否有 import android.widget.LinearLayout
+          if ! grep -q "import android.widget.LinearLayout;" "$RAID_FILE"; then
+            sed -i '0,/^import android.widget.FrameLayout;/s//import android.widget.FrameLayout;\nimport android.widget.LinearLayout;/' "$RAID_FILE"
+            echo "  已插入 LinearLayout import"
+          fi
+          # 检查 android.graphics.RectF
+          if ! grep -q "import android.graphics.RectF;" "$RAID_FILE"; then
+            sed -i '0,/^import android.graphics.Paint;/s//import android.graphics.Paint;\nimport android.graphics.RectF;/' "$RAID_FILE"
+            echo "  已插入 RectF import"
+          fi
+          # 检查 android.view.Gravity
+          if ! grep -q "import android.view.Gravity;" "$RAID_FILE"; then
+            sed -i '0,/^import android.view.MotionEvent;/s//import android.view.Gravity;\nimport android.view.MotionEvent;/' "$RAID_FILE"
+            echo "  已插入 Gravity import"
+          fi
+          echo "  ---- RaidScreen 的 import 部分 ----"
+          grep "^import" "$RAID_FILE" | head -30
+        fi
 
         echo ""
-        echo "===== 3. 修复 UI.java import ====="
-        SCREEN_DIR=app/src/main/java/com/gunmu/town/screen
-        UI_FILE=app/src/main/java/com/gunmu/town/util/UI.java
+        echo "===== 3. UI.java 补 GameState import ====="
         if ! grep -q "import com.gunmu.town.data.GameState" "$UI_FILE"; then
           sed -i 's|^import com.gunmu.town.MainActivity;|import com.gunmu.town.MainActivity;\nimport com.gunmu.town.data.GameState;|' "$UI_FILE"
         fi
 
         echo ""
-        echo "===== 4. 修复 SimpleScreen 去掉 final ====="
+        echo "===== 4. SimpleScreen 去掉 final ====="
         SIMPLE_FILE=$(find "$SCREEN_DIR" -iname "simplescreen.java" | head -1)
         if [ -n "$SIMPLE_FILE" ]; then
           sed -i 's|private final GameState s;|private GameState s;|' "$SIMPLE_FILE"
         fi
 
         echo ""
-        echo "===== 5. 修复 RaidScreen 类型 ====="
-        RAID_FILE=$(find "$SCREEN_DIR" -iname "raidscreen.java" | head -1)
+        echo "===== 5. RaidScreen 类型修正 ====="
         if [ -n "$RAID_FILE" ]; then
           sed -i 's|GameData\.Enemy target = null;|Enemy target = null;|g' "$RAID_FILE"
         fi
+
+        echo ""
+        echo "===== 修复后的所有 java 文件 ====="
+        find app/src/main/java -name "*.java" -type f | sort
 
     - uses: actions/setup-java@v4
       with:
