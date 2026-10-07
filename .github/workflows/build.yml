@@ -20,20 +20,22 @@ jobs:
           cp -r _extract/. .
         fi
         rm -rf _extract
+        echo "=== 根目录文件 ==="
+        ls -la
 
     - name: 环境诊断
       run: |
-        echo "=== 根目录 ==="
-        ls -la
-        echo ""
         echo "=== settings.gradle ==="
-        cat settings.gradle 2>/dev/null || echo "无"
+        cat settings.gradle 2>/dev/null || echo "无 settings.gradle"
         echo ""
         echo "=== 根 build.gradle ==="
-        cat build.gradle 2>/dev/null || echo "无"
+        cat build.gradle 2>/dev/null || echo "无根 build.gradle"
         echo ""
         echo "=== app/build.gradle ==="
-        cat app/build.gradle 2>/dev/null || echo "无"
+        cat app/build.gradle 2>/dev/null || echo "无 app/build.gradle"
+        echo ""
+        echo "=== app/src/main/AndroidManifest.xml ==="
+        cat app/src/main/AndroidManifest.xml 2>/dev/null || echo "无 AndroidManifest.xml"
 
     - uses: actions/setup-java@v4
       with:
@@ -57,16 +59,30 @@ jobs:
       run: |
         SDKMANAGER=/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
         yes | $SDKMANAGER --licenses > /dev/null 2>&1 || true
-        $SDKMANAGER "platform-tools" "platforms;android-34" "build-tools;34.0.0" 2>&1 | tail -5
-        echo "=== 已安装的包 ==="
-        $SDKMANAGER --list_installed 2>/dev/null | tail -20 || true
+        $SDKMANAGER "platform-tools" "platforms;android-34" "build-tools;34.0.0" > /dev/null 2>&1 || true
+        echo "SDK 包安装完成"
 
     - name: 构建 APK
-      run: gradle assembleDebug --no-daemon --stacktrace --info 2>&1 | tail -100
+      run: gradle assembleDebug --no-daemon --stacktrace
+
+    - name: 查找 APK 文件
+      if: always()
+      run: |
+        echo "=== 搜索所有 .apk 文件 ==="
+        find . -name "*.apk" -type f 2>/dev/null
+        echo ""
+        echo "=== app/build 目录结构 ==="
+        ls -la app/build/ 2>/dev/null || echo "app/build 不存在"
+        echo ""
+        echo "=== app/build/outputs 目录 ==="
+        ls -laR app/build/outputs/ 2>/dev/null || echo "app/build/outputs 不存在"
 
     - name: 上传 APK
       uses: actions/upload-artifact@v4
-      if: success()
+      if: always()
       with:
         name: gunmu-town-apk
-        path: app/build/outputs/apk/debug/app-debug.apk
+        path: |
+          **/app-debug.apk
+          **/*.apk
+        if-no-files-found: warn
