@@ -20,8 +20,31 @@ jobs:
           cp -r _extract/. .
         fi
         rm -rf _extract
-        echo "=== app 模块文件清单 ==="
-        find app -type f 2>/dev/null | head -40
+
+    - name: 自动修复代码 bug
+      run: |
+        echo "===== 修复 1: UI.java 加 GameState import ====="
+        sed -i 's|^import com.gunmu.town.MainActivity;|import com.gunmu.town.MainActivity;\nimport com.gunmu.town.data.GameState;|' \
+          app/src/main/java/com/gunmu/town/util/UI.java
+        grep -n "import com.gunmu.town.data.GameState" app/src/main/java/com/gunmu/town/util/UI.java && echo "✓ UI.java 修复成功" || echo "✗ UI.java 修复失败"
+
+        echo "===== 修复 2: SimpleScreen.java 去掉 final ====="
+        sed -i 's|private final GameState s;|private GameState s;|' \
+          app/src/main/java/com/gunmu/town/screen/SimpleScreen.java
+        grep -n "private GameState s;" app/src/main/java/com/gunmu/town/screen/SimpleScreen.java && echo "✓ SimpleScreen.java 修复成功" || echo "✗ SimpleScreen.java 修复失败"
+
+        echo "===== 修复 3: RaidScreen.java 类型修正 ====="
+        sed -i 's|GameData\.Enemy target = null;|Enemy target = null;|g' \
+          app/src/main/java/com/gunmu/town/screen/RaidScreen.java
+        grep -n "Enemy target = null;" app/src/main/java/com/gunmu/town/screen/RaidScreen.java && echo "✓ RaidScreen.java 修复成功" || echo "✗ RaidScreen.java 修复失败"
+
+        echo "===== 修复后的关键行预览 ====="
+        echo "--- UI.java 前 20 行 ---"
+        head -20 app/src/main/java/com/gunmu/town/util/UI.java
+        echo "--- SimpleScreen.java 类成员 ---"
+        grep -n "GameState s" app/src/main/java/com/gunmu/town/screen/SimpleScreen.java
+        echo "--- RaidScreen.java 目标变量 ---"
+        grep -n "target = null" app/src/main/java/com/gunmu/town/screen/RaidScreen.java
 
     - uses: actions/setup-java@v4
       with:
@@ -47,27 +70,22 @@ jobs:
         yes | $SDKMANAGER --licenses > /dev/null 2>&1 || true
         $SDKMANAGER "platform-tools" "platforms;android-34" "build-tools;34.0.0" > /dev/null 2>&1 || true
 
-    - name: 列出所有任务
-      run: gradle tasks --all --no-daemon 2>&1 | grep -i "assemble" || echo "没有 assemble 相关任务"
-
     - name: 构建 APK
-      run: gradle assembleDebug --no-daemon --console=plain 2>&1 | tee gradle.log
+      run: |
+        set +e
+        gradle assembleDebug --no-daemon 2>&1 | tee gradle.log
+        STATUS=$?
+        echo ""
+        echo "================ 编译错误 ================"
+        grep -B 1 -A 4 "error:" gradle.log | head -80 || echo "（无编译错误）"
+        echo "=========================================="
+        exit $STATUS
 
-    - name: 检查产物
+    - name: 查找 APK
       if: always()
       run: |
-        echo ""
-        echo "========== 1. 全仓库找 APK =========="
         find . -name "*.apk" -type f 2>/dev/null || echo "没找到 APK"
-        echo ""
-        echo "========== 2. app/build 目录 =========="
-        ls -la app/build/ 2>/dev/null || echo "app/build 不存在"
-        echo ""
-        echo "========== 3. app/build/outputs =========="
-        ls -laR app/build/outputs/ 2>/dev/null || echo "app/build/outputs 不存在"
-        echo ""
-        echo "========== 4. gradle 日志最后 40 行 =========="
-        tail -40 gradle.log
+        ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "apk 目录不存在"
 
     - name: 上传 APK
       uses: actions/upload-artifact@v4
@@ -76,6 +94,5 @@ jobs:
         name: gunmu-town-apk
         path: |
           app/build/outputs/apk/debug/app-debug.apk
-          app/build/outputs/**/*.apk
           **/*.apk
         if-no-files-found: warn
